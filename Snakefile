@@ -293,7 +293,7 @@ else:
 if 'postImpute' in config['pipeline_versions']:
     config['impute']['version_postImpute'] = config['pipeline_versions']['postImpute']
 elif version_imputePipeline == 'local':
-    config['impute']['version_postImpute'] = local_src + '/imputePipeline/workflow/modules/postImpute/workflow/Snakefile'
+    config['impute']['version_postImpute'] = local_src + '/imputePipeline/workflow/modules/postImpute/'
 
 if version_imputePipeline == 'local':
     sfile_imputation = local_src + '/imputePipeline/workflow/Snakefile'
