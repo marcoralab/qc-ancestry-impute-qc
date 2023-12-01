@@ -119,7 +119,7 @@ local_src = '/sc/arion/projects/load/users/fultob01/src'
 
 if version_GWASampleFiltering == 'local':
     sfile_GWASampleFiltering_ref = local_src + '/GWASampleFiltering/workflow/rules/reference.smk'
-elif re.match(r'/', version_GWASampleFiltering):
+elif re.search(r'/', version_GWASampleFiltering):
     sfile_GWASampleFiltering_ref = os.path.join(
       os.path.normpath(version_GWASampleFiltering), 'workflow', 'rules', 'reference.smk')
 else:
@@ -147,7 +147,7 @@ prefilter_prefix = 'intermediate/pre-impute_filter'
 
 if version_GWASampleFiltering == 'local':
     sfile_GWASampleFiltering = local_src + '/GWASampleFiltering/workflow/Snakefile'
-elif re.match(r'/', version_GWASampleFiltering):
+elif re.search(r'/', version_GWASampleFiltering):
     sfile_GWASampleFiltering = os.path.join(
       os.path.normpath(version_GWASampleFiltering), 'workflow', 'Snakefile')
 else:
@@ -297,7 +297,7 @@ elif version_imputePipeline == 'local':
 
 if version_imputePipeline == 'local':
     sfile_imputation = local_src + '/imputePipeline/workflow/Snakefile'
-elif re.match(r'/', version_imputePipeline):
+elif re.search(r'/', version_imputePipeline):
     sfile_imputation = os.path.join(
       os.path.normpath(version_imputePipeline), 'workflow', 'Snakefile')
 else:
