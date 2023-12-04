@@ -121,7 +121,7 @@ if version_GWASampleFiltering == 'local':
     sfile_GWASampleFiltering_ref = local_src + '/GWASampleFiltering/workflow/rules/reference.smk'
 elif re.search(r'/', version_GWASampleFiltering):
     sfile_GWASampleFiltering_ref = os.path.join(
-      os.path.normpath(version_GWASampleFiltering), 'workflow', 'rules', 'reference.smk')
+      os.path.abspath(version_GWASampleFiltering), 'workflow', 'rules', 'reference.smk')
 else:
     sfile_GWASampleFiltering_ref = github('marcoralab/GWASampleFiltering', path='workflow/rules/reference.smk', tag=version_GWASampleFiltering)
 
@@ -149,7 +149,7 @@ if version_GWASampleFiltering == 'local':
     sfile_GWASampleFiltering = local_src + '/GWASampleFiltering/workflow/Snakefile'
 elif re.search(r'/', version_GWASampleFiltering):
     sfile_GWASampleFiltering = os.path.join(
-      os.path.normpath(version_GWASampleFiltering), 'workflow', 'Snakefile')
+      os.path.abspath(version_GWASampleFiltering), 'workflow', 'Snakefile')
 else:
     sfile_GWASampleFiltering = github('marcoralab/GWASampleFiltering', path='workflow/Snakefile', tag=version_GWASampleFiltering)
 
@@ -299,7 +299,7 @@ if version_imputePipeline == 'local':
     sfile_imputation = local_src + '/imputePipeline/workflow/Snakefile'
 elif re.search(r'/', version_imputePipeline):
     sfile_imputation = os.path.join(
-      os.path.normpath(version_imputePipeline), 'workflow', 'Snakefile')
+      os.path.abspath(version_imputePipeline), 'workflow', 'Snakefile')
 else:
     sfile_imputation = github('marcoralab/imputePipeline', path='workflow/Snakefile', tag=version_imputePipeline)
 
