@@ -15,8 +15,10 @@ os.environ["snakemake_internet"] = '1'
 
 configfile: 'config/config.yaml'
 
+
 version_GWASampleFiltering = config['pipeline_versions']['GWASampleFiltering']
 version_imputePipeline = config['pipeline_versions']['imputePipeline']
+version_vcf_liftover = config['pipeline_versions']['vcf_liftover']
 
 identifiers = [x for x in config['datasets'].keys()]
 
@@ -86,7 +88,7 @@ shell.executable('/bin/bash')
 wildcard_constraints:
     identifier = r'[^/]+'
 
-localrules: all, imputation_submit_imputation, imputation_download_imputation, ref_download_md5_b38, ref_download_md5_hg19, ref_download_tg_fa, ref_download_tg_ped, ref_download_tg_chrom, ref_download_md5_b38, ref_download_md5_hg19
+localrules: all #, imputation_submit_imputation, imputation_download_imputation, ref_download_md5_b38, ref_download_md5_hg19, ref_download_tg_fa, ref_download_tg_ped, ref_download_tg_chrom, ref_download_md5_b38, ref_download_md5_hg19
 
 rule all:
     input:
@@ -160,11 +162,159 @@ module prefiltering:
 
 use rule * from prefiltering as prefiltering_*
 
+def liftover_align_fasta(wc):
+    build = config['datasets'][wc.identifier]['build']
+    if build.lower() in ['b37', 'hg19', 'grch37']:
+        return f"/sc/arion/projects/load/users/picard03/projects/DIAN/dian_gwas_analysis/dataset_ADAD_array/reference/human_g1k_hg19.fasta"
+    elif build.lower() in ['b38', 'hg38', 'grch38']:
+        return f"/sc/arion/projects/load/users/picard03/projects/DIAN/dian_gwas_analysis/dataset_ADAD_array/reference/human_g1k_GRCh38.fasta"
+    else:
+        raise ValueError(f"Invalid build {build}")
+
+#add Sample flip
+rule liftover_align:
+    input:
+        bed = lambda wc: config['datasets'][wc.identifier]['filestem'] + '.bed',
+        bim = lambda wc: config['datasets'][wc.identifier]['filestem'] + '.bim',
+        fam = lambda wc: config['datasets'][wc.identifier]['filestem'] + '.fam',
+        fasta = liftover_align_fasta
+    output:
+        multiext("intermediate/liftover_align/{identifier}_flipped", ".bim", ".bed", ".fam")
+    params:
+        outstem = "intermediate/liftover_align/{identifier}"
+    resources:
+        mem_mb = 10000,
+        time_min = 30
+    container: 'docker://befh/flippyr:0.5.3'
+    shell: "flippyr -p {input.fasta} -o {params.outstem} {input.bim}"
+
+# Recode sample plink file to vcf
+rule liftover_Plink2Vcf:
+    input:
+        bed = "intermediate/liftover_align/{identifier}_flipped.bed",
+        bim = "intermediate/liftover_align/{identifier}_flipped.bim",
+        fam = "intermediate/liftover_align/{identifier}_flipped.fam"
+    output: "intermediate/liftover_align/{identifier}_flipped.vcf.gz"
+    params:
+        outstem = "intermediate/liftover_align/{identifier}_flipped"
+    resources:
+        mem_mb = 10000,
+        time_min = 180
+    conda: "envs/PLINK.yaml"
+    shell:
+        '''
+        plink --bed {input.bed} --bim {input.bim} --fam {input.fam} --recode vcf bgz --real-ref-alleles --out {params.outstem}
+	'''
+
+def rename_chrs(wc):
+    build = config['datasets'][wc.identifier]['build']
+    if build.lower() in ['b37', 'hg19', 'grch37']:
+        return f"reference/rename_chrs_b37.txt"
+    elif build.lower() in ['b38', 'hg38', 'grch38']:
+        return f"reference/rename_chrs_b38.txt"
+    else:
+        raise ValueError(f"Invalid build {build}")
+
+rule rename_chrs:
+    input: "intermediate/liftover_align/{identifier}_flipped.vcf.gz"
+    output: "intermediate/liftover_align/{identifier}_flipped_renamed.vcf.gz"
+    params:
+        txt = rename_chrs
+    resources:
+        mem_mb = 10000,
+        time_min = 120
+    #conda: "envs/bcftools.yaml"
+    shell:
+        '''
+        ml bcftools
+        bcftools annotate --rename-chrs {params.txt} -Oz -o {output} {input}
+        bcftools index -t {output}
+	'''
+
+## VCF liftover module
+liftover = {}
+liftover['inputs'] = {
+    k: {'input_vcf': f"intermediate/liftover_align/{k}_flipped_renamed.vcf.gz",
+        'build': config['datasets'][k]['build'],
+        'contigs': config['impute']['chroms']} 
+    for k in identifiers
+}
+liftover['output_builds'] = ['b38']
+liftover['all_GATK_builds'] = True
+liftover['concatenate'] = True
+liftover['liftover_outdir'] = "intermediate/lifted"
+
+if version_vcf_liftover == 'local':
+    sfile_vcf_liftover = local_src + '/vcf_liftover/workflow/Snakefile'
+elif re.search(r'/', version_vcf_liftover):
+    sfile_vcf_liftover = os.path.join(
+      os.path.abspath(version_vcf_liftover), 'workflow', 'Snakefile')
+else:
+    sfile_vcf_liftover = github('marcoralab/vcf_liftover', path='workflow/Snakefile', tag=version_vcf_liftover)
+
+module vcf_liftover:
+    snakefile: sfile_vcf_liftover
+    config: liftover
+
+use rule * from vcf_liftover as vcf_liftover_*
+
+rule make_lifted_plink_all:
+    input: 'intermediate/lifted/{identifier}.b38.same_chr.vcf.gz'
+    output: multiext("intermediate/lifted/{identifier}", ".bed", ".bim", ".fam")
+    params:
+        out_plink = "intermediate/lifted/{identifier}"
+    threads: 10
+    resources:
+        mem_mb = 3000,
+        walltime = "96:00"
+    conda: "envs/PLINK.yaml"
+    shell: 'plink --keep-allele-order --vcf {input} --double-id --memory 10000 --threads 10 --make-bed --out {params.out_plink}'
+
+rule cat_fams:
+    input: [ config['datasets'][x]['filestem'] + '.fam' for x in identifiers ]
+    output: 'intermediate/all_preimpute.fam'
+    threads: 1
+    resources:
+        mem_mb = 1024,
+        time_min = 180
+    shell: r'''
+awk 'BEGIN {{
+    OFS = "\t"
+}}
+NF != 6 {{
+    print "Error: Number of fields on line " FNR " of " FILENAME " is not 6"
+    exit 1
+}}
+1 {{
+    $1 = $1
+    print
+}}' {input} > {output}
+'''
+
+rule fix_fam:
+    input:
+        oldfam = rules.cat_fams.output,
+        newfam = 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered.fam'
+    output: 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered_fixed.fam'
+    threads: 1
+    resources:
+        mem_mb = 1024,
+        time_min = 180
+    conda: "envs/R.yaml"
+    script: 'fix_fam.R'
+
+use rule fix_fam as fix_lifted_fam with:
+    input: 
+        oldfam = rules.cat_fams.output,
+        newfam = 'intermediate/lifted/{identifier}.fam'
+    output:
+        "intermediate/lifted/{identifier}_fixed.fam"
+
 rule link_unimputed:
     input:
-        bed = lambda wc: config['datasets'][wc.identifier] + '.bed',
-        bim = lambda wc: config['datasets'][wc.identifier] + '.bim',
-        fam = lambda wc: config['datasets'][wc.identifier] + '.fam'
+        bed = "intermediate/lifted/{identifier}.bed",
+        bim = "intermediate/lifted/{identifier}.bim",
+        fam = "intermediate/lifted/{identifier}_fixed.fam"
     output:
         bed = prefilter_prefix + '/input/{identifier}.bed',
         bim = prefilter_prefix + '/input/{identifier}.bim',
@@ -225,6 +375,7 @@ rule link_prefilt_ped:
     shell: 'ln -rs {input} {output}'
 
 
+#new version
 rule ancestry_sample_lists:
     input: prefilter_prefix + '/output/{identifier}_cluster_pops.tsv'
     output: 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}.samples'
@@ -236,9 +387,24 @@ rule ancestry_sample_lists:
     shell:
         '''
 mlr --itsv --onidx --fs tab \
-  filter '$superpop_infered == "{wildcards.ancestry}"' \
-  then cut -f FID,IID {input} > {output}
+  filter '$superpop_infered == "{wildcards.ancestry}" && $cohort != "Reference"' \
+  then put '$FID_IID = format("{{}}_{{}}", $FID, $IID)' \
+  then cut -f FID_IID {input} > {output}
 '''
+#rule ancestry_sample_lists:
+#    input: prefilter_prefix + '/output/{identifier}_cluster_pops.tsv'
+#    output: 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}.samples'
+#    conda: 'envs/miller.yaml'
+#    threads: 1
+#    resources:
+#        mem_mb = 1024,
+#        time_min = 180
+#    shell:
+#        '''
+#mlr --itsv --onidx --fs tab \
+#  filter '$superpop_infered == "{wildcards.ancestry}"' \
+#  then cut -f FID,IID {input} > {output}
+#'''
 
 checkpoint count_spop:
     input:
@@ -252,25 +418,114 @@ checkpoint count_spop:
         time_min = 10
     script: 'rule_count_spop.R'
 
+#new version
 rule ancestry_sample_filt:
     input:
         samps = rules.ancestry_sample_lists.output,
-        plink = lambda wc: [config['datasets'][wc.identifier] + x for x in ['.bed', '.bim', '.fam']]
+        vcf = 'intermediate/lifted/{identifier}.b38.same_chr.vcf.gz'
     output:
-        multiext('intermediate/pre-impute_ancestry/{identifier}_{ancestry}',
-                 '.bed', '.bim', '.fam')
-    params:
-        ins = lambda wc: config['datasets'][wc.identifier],
-        out = 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}'
-    conda: 'envs/PLINK.yaml'
-    threads: 1
+        vcf = 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}.vcf.gz',
+        tbi = 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}.vcf.gz.tbi'
+    conda: 'envs/bcftools.yaml'
     resources:
-        mem_mb = 4096,
+        mem_mb = 10000,
+        time_min = 120
+    shell: '''
+bcftools view -S {input.samps} -Oz -o {output.vcf} {input.vcf}
+bcftools index -tf {output.vcf}
+'''
+
+#rule ancestry_sample_filt:
+#    input:
+#        samps = rules.ancestry_sample_lists.output,
+#        plink = multiext(prefilter_prefix + '/input/{identifier}', '.bed', '.bim', '.fam')
+#    output: multiext('intermediate/pre-impute_ancestry/{identifier}_{ancestry}', '.bed', '.bim', '.fam')
+#    params:
+#        ins = prefilter_prefix + '/input/{identifier}',
+#        out = 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}'
+#    conda: 'envs/PLINK.yaml'
+#    threads: 1
+#    resources:
+#        mem_mb = 4096,
+#        time_min = 180
+#    shell:
+#        '''
+#plink --bfile {params.ins} --keep-allele-order --keep {input.samps} \
+#  --make-bed --out {params.out}
+#'''
+
+rule rename_for_dup:
+    input: rules.ancestry_sample_filt.output.vcf
+    output: 'intermediate/formerge/{identifier}_{ancestry}_replicate{dup}.vcf.gz'
+    conda: 'envs/bcftools.yaml'
+    resources:
+        mem_mb = 10000,
+        time_min = 120
+    shell: '''
+ln -rs {input} {output}
+bcftools index -tf {output}
+'''
+
+
+rule dup_samples:
+    input:
+        vcf = rules.ancestry_sample_filt.output.vcf,
+        vcfvcfvcf = lambda wc: expand('intermediate/formerge/{{identifier}}_{{ancestry}}_replicate{dup}.vcf.gz',
+                                      dup=[x + 1 for x in range(int(wc['rep']) - 1)]),
+        tbi = rules.ancestry_sample_filt.output.tbi
+    output: 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}_duplicated{rep}.vcf.gz'
+    conda: 'envs/bcftools.yaml'
+    resources:
+        mem_mb = 10000,
+        time_min = 120
+    shell: 'bcftools merge --force-samples {input.vcf} {input.vcfvcfvcf} -Oz -o {output}'
+
+
+def identifier_ancestry_dup(wc):
+    cp = checkpoints.count_spop.get(**wc)
+    with cp.output[0].open() as f:
+        count_tab = pd.read_table(f)
+    count_tab['dups'] = np.int32(np.ceil(30 / count_tab['n']))
+    ia = count_tab[count_tab['identifier_ancestry'] == f"{wc['identifier']}_{wc['ancestry']}"]
+    assert ia.shape[0] == 1
+    dups = ia.loc[ia.index[0], 'dups']
+    if dups == 1:
+        return expand('intermediate/pre-impute_ancestry/{identifier}_{ancestry}.vcf.gz', **wc)
+    else:
+        return expand('intermediate/pre-impute_ancestry/{identifier}_{ancestry}_duplicated{rep}.vcf.gz',
+                      identifier=wc['identifier'], ancestry=wc['ancestry'], rep=dups)
+
+
+use rule make_lifted_plink_all as make_imputation_plink with:
+    input: identifier_ancestry_dup
+    output: temp(multiext("intermediate/imputation_plink/{identifier}_{ancestry}", ".bed", ".bim", ".fam"))
+    params:
+        out_plink = "intermediate/imputation_plink/{identifier}_{ancestry}"
+
+
+use rule fix_fam as fix_imputation_fam with:
+    input:
+        oldfam = rules.cat_fams.output,
+        newfam = "intermediate/imputation_plink/{identifier}_{ancestry}.fam"
+    output: "intermediate/imputation_plink_fixed/{identifier}_{ancestry}_fixed.fam"
+
+
+rule copy_imputation:
+    input:
+        bed = "intermediate/imputation_plink/{identifier}_{ancestry}.bed",
+        bim = "intermediate/imputation_plink/{identifier}_{ancestry}.bim",
+        fam = rules.fix_imputation_fam.output
+    output:
+        bed = "intermediate/pre-impute_ancestry/{identifier}_{ancestry}.bed",
+        bim = "intermediate/pre-impute_ancestry/{identifier}_{ancestry}.bim",
+        fam = "intermediate/pre-impute_ancestry/{identifier}_{ancestry}.fam"
+    resources:
+        mem_mb = 1024,
         time_min = 180
-    shell:
-        '''
-plink --bfile {params.ins} --keep-allele-order --keep {input.samps} \
-  --make-bed --out {params.out}
+    shell: '''
+cp {input.bed} {output.bed}
+cp {input.bim} {output.bim}
+cp {input.fam} {output.fam}
 '''
 
 ########################################
@@ -285,8 +540,10 @@ config['impute']['SAMPLES'] = identifier_ancestry # [x.replace('_', '.') for x i
 genome_build_preimp = config['Sample_Filtering_preimpute']['genome_build'].lower()
 if genome_build_preimp in ['hg19', 'hg37', 'grch37', 'b37']:
     config['impute']['ref'] = 'reference/human_g1k_hg19.fasta'
+    config['impute']['imputation']['default']['build'] = 'hg19'
 elif genome_build_preimp in ['hg38', 'grch38', 'b38']:
     config['impute']['ref'] = 'reference/human_g1k_GRCh38.fasta'
+    config['impute']['imputation']['default']['build'] = 'hg38'
 else:
     raise ValueError('genome build must be hg19 or hg38')
 
@@ -303,45 +560,15 @@ elif re.search(r'/', version_imputePipeline):
 else:
     sfile_imputation = github('marcoralab/imputePipeline', path='workflow/Snakefile', tag=version_imputePipeline)
 
-
 module imputation:
     snakefile: sfile_imputation
     config: config['impute']
 
 use rule * from imputation as imputation_*
 
-rule cat_fams:
-    input: [config['datasets'][x] + '.fam' for x in identifiers]
-    output: 'intermediate/all_preimpute.fam'
-    threads: 1
-    resources:
-        mem_mb = 1024,
-        time_min = 180
-    shell: r'''
-awk 'BEGIN {{
-    OFS = "\t"
-}}
-NF != 6 {{
-    print "Error: Number of fields on line " FNR " of " FILENAME " is not 6"
-    exit 1
-}}
-1 {{
-    $1 = $1
-    print
-}}' {input} > {output}
-'''
+#rule cat_fams happens here (moved up in pipeline for use among liftover rules)
 
-rule fix_fam:
-    input:
-        oldfam = rules.cat_fams.output,
-        newfam = 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered.fam'
-    output: 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered_fixed.fam'
-    threads: 1
-    resources:
-        mem_mb = 1024,
-        time_min = 180
-    conda: "envs/R.yaml"
-    script: 'fix_fam.R'
+#rule fix_fam happens here (moved up in pipeline for use among liftover rules)
 
 use rule link_unimputed as link_imputed_output with:
     input:
@@ -426,7 +653,7 @@ if 'bgen_merged' in config['impute']['outputs']:
 
 ########################################
 ###                                  ###
-###     Pre-imputation Sample QC     ###
+###     Post-imputation Sample QC    ###
 ###                                  ###
 ########################################
 
