@@ -104,63 +104,11 @@ rule all:
 
 ########################################
 ###                                  ###
-###     Pre-imputation Sample QC     ###
+###     Pre-imputation Liftover      ###
 ###                                  ###
 ########################################
 
-## GWAS Sample Filtering References
-refs = {}
-refs['ref_only'] = True
-refs['genome_build'] = ['hg19', 'hg38']
-refs['nointernet'] = True #TODO Delete this
-refs['GenoMiss'] = list(set([
-    config['Sample_Filtering_preimpute']['QC']['GenoMiss'],
-    config['Sample_Filtering_postimpute']['QC']['GenoMiss']]))
-
-local_src = '/sc/arion/projects/load/users/fultob01/src'
-
-if version_GWASampleFiltering == 'local':
-    sfile_GWASampleFiltering_ref = local_src + '/GWASampleFiltering/workflow/rules/reference.smk'
-elif re.search(r'/', version_GWASampleFiltering):
-    sfile_GWASampleFiltering_ref = os.path.join(
-      os.path.abspath(version_GWASampleFiltering), 'workflow', 'rules', 'reference.smk')
-else:
-    sfile_GWASampleFiltering_ref = github('marcoralab/GWASampleFiltering', path='workflow/rules/reference.smk', tag=version_GWASampleFiltering)
-
-module refs:
-    snakefile: sfile_GWASampleFiltering_ref
-    config: refs
-
-use rule * from refs as ref_*
-
-## GWAS Sample Filtering
-prefilter = config['Sample_Filtering_preimpute']
-prefilter['is_module'] = True
-prefilter['construct_ref'] = False
-prefilter['nointernet'] = True
-prefilter['SAMPLE'] = identifiers
-prefilter['start'] = {'files': multiext('input/{sample}',
-                                        '.bed', '.bim', '.fam'),
-                       'stem': 'input/{sample}'}
-prefilter['start']['sex'] = prefilter['start']['files']
-prefilter['start']['sex_stem'] = prefilter['start']['stem']
-prefilter['DATAOUT'] = 'output'
-prefilter_prefix = 'intermediate/pre-impute_filter'
-
-if version_GWASampleFiltering == 'local':
-    sfile_GWASampleFiltering = local_src + '/GWASampleFiltering/workflow/Snakefile'
-elif re.search(r'/', version_GWASampleFiltering):
-    sfile_GWASampleFiltering = os.path.join(
-      os.path.abspath(version_GWASampleFiltering), 'workflow', 'Snakefile')
-else:
-    sfile_GWASampleFiltering = github('marcoralab/GWASampleFiltering', path='workflow/Snakefile', tag=version_GWASampleFiltering)
-
-module prefiltering:
-    snakefile: sfile_GWASampleFiltering
-    config: prefilter
-    prefix: prefilter_prefix
-
-use rule * from prefiltering as prefiltering_*
+## Preparation steps
 
 def liftover_align_fasta(wc):
     build = config['datasets'][wc.identifier]['build']
@@ -295,7 +243,7 @@ rule fix_fam:
     input:
         oldfam = rules.cat_fams.output,
         newfam = 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered.fam'
-    output: 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered_fixed.fam'
+    output: 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered_fixed.famx'
     threads: 1
     resources:
         mem_mb = 1024,
@@ -309,6 +257,15 @@ use rule fix_fam as fix_lifted_fam with:
         newfam = 'intermediate/lifted/{identifier}.fam'
     output:
         "intermediate/lifted/{identifier}_fixed.fam"
+
+
+########################################
+###                                  ###
+###     Pre-imputation Sample QC     ###
+###                                  ###
+########################################
+
+prefilter_prefix = 'intermediate/pre-impute_filter'
 
 rule link_unimputed:
     input:
@@ -374,8 +331,59 @@ rule link_prefilt_ped:
         time_min = 2
     shell: 'ln -rs {input} {output}'
 
+## GWAS Sample Filtering References
+refs = {}
+refs['ref_only'] = True
+refs['genome_build'] = ['hg19', 'hg38']
+refs['nointernet'] = True #TODO Delete this
+refs['GenoMiss'] = list(set([
+    config['Sample_Filtering_preimpute']['QC']['GenoMiss'],
+    config['Sample_Filtering_postimpute']['QC']['GenoMiss']]))
 
-#new version
+local_src = '/sc/arion/projects/load/users/fultob01/src'
+
+if version_GWASampleFiltering == 'local':
+    sfile_GWASampleFiltering_ref = local_src + '/GWASampleFiltering/workflow/rules/reference.smk'
+elif re.search(r'/', version_GWASampleFiltering):
+    sfile_GWASampleFiltering_ref = os.path.join(
+      os.path.abspath(version_GWASampleFiltering), 'workflow', 'rules', 'reference.smk')
+else:
+    sfile_GWASampleFiltering_ref = github('marcoralab/GWASampleFiltering', path='workflow/rules/reference.smk', tag=version_GWASampleFiltering)
+
+module refs:
+    snakefile: sfile_GWASampleFiltering_ref
+    config: refs
+
+use rule * from refs as ref_*
+
+## GWAS Sample Filtering
+prefilter = config['Sample_Filtering_preimpute']
+prefilter['is_module'] = True
+prefilter['construct_ref'] = False
+prefilter['nointernet'] = True
+prefilter['SAMPLE'] = identifiers
+prefilter['start'] = {'files': multiext('input/{sample}',
+                                        '.bed', '.bim', '.fam'),
+                       'stem': 'input/{sample}'}
+prefilter['start']['sex'] = prefilter['start']['files']
+prefilter['start']['sex_stem'] = prefilter['start']['stem']
+prefilter['DATAOUT'] = 'output'
+
+if version_GWASampleFiltering == 'local':
+    sfile_GWASampleFiltering = local_src + '/GWASampleFiltering/workflow/Snakefile'
+elif re.search(r'/', version_GWASampleFiltering):
+    sfile_GWASampleFiltering = os.path.join(
+      os.path.abspath(version_GWASampleFiltering), 'workflow', 'Snakefile')
+else:
+    sfile_GWASampleFiltering = github('marcoralab/GWASampleFiltering', path='workflow/Snakefile', tag=version_GWASampleFiltering)
+
+module prefiltering:
+    snakefile: sfile_GWASampleFiltering
+    config: prefilter
+    prefix: prefilter_prefix
+
+use rule * from prefiltering as prefiltering_*
+
 rule ancestry_sample_lists:
     input: prefilter_prefix + '/output/{identifier}_cluster_pops.tsv'
     output: 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}.samples'
@@ -391,20 +399,6 @@ mlr --itsv --onidx --fs tab \
   then put '$FID_IID = format("{{}}_{{}}", $FID, $IID)' \
   then cut -f FID_IID {input} > {output}
 '''
-#rule ancestry_sample_lists:
-#    input: prefilter_prefix + '/output/{identifier}_cluster_pops.tsv'
-#    output: 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}.samples'
-#    conda: 'envs/miller.yaml'
-#    threads: 1
-#    resources:
-#        mem_mb = 1024,
-#        time_min = 180
-#    shell:
-#        '''
-#mlr --itsv --onidx --fs tab \
-#  filter '$superpop_infered == "{wildcards.ancestry}"' \
-#  then cut -f FID,IID {input} > {output}
-#'''
 
 checkpoint count_spop:
     input:
@@ -418,14 +412,22 @@ checkpoint count_spop:
         time_min = 10
     script: 'rule_count_spop.R'
 
-#new version
+
+########################################
+###                                  ###
+###   Imputation                     ###
+###                                  ###
+########################################
+
+## Preparation for imputation
+
 rule ancestry_sample_filt:
     input:
         samps = rules.ancestry_sample_lists.output,
-        vcf = 'intermediate/lifted/{identifier}.b38.same_chr.vcf.gz'
+        vcf = 'intermediate/lifted/{identifier}.b{build}.chr{chrom}_only.vcf.gz'
     output:
-        vcf = 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}.vcf.gz',
-        tbi = 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}.vcf.gz.tbi'
+        vcf = temp('intermediate/pre-impute_ancestry/{identifier}_{ancestry}.b{build}.chr{chrom}.vcf.gz'),
+        tbi = 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}.b{build}.chr{chrom}.vcf.gz.tbi'
     conda: 'envs/bcftools.yaml'
     resources:
         mem_mb = 10000,
@@ -435,28 +437,9 @@ bcftools view -S {input.samps} -Oz -o {output.vcf} {input.vcf}
 bcftools index -tf {output.vcf}
 '''
 
-#rule ancestry_sample_filt:
-#    input:
-#        samps = rules.ancestry_sample_lists.output,
-#        plink = multiext(prefilter_prefix + '/input/{identifier}', '.bed', '.bim', '.fam')
-#    output: multiext('intermediate/pre-impute_ancestry/{identifier}_{ancestry}', '.bed', '.bim', '.fam')
-#    params:
-#        ins = prefilter_prefix + '/input/{identifier}',
-#        out = 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}'
-#    conda: 'envs/PLINK.yaml'
-#    threads: 1
-#    resources:
-#        mem_mb = 4096,
-#        time_min = 180
-#    shell:
-#        '''
-#plink --bfile {params.ins} --keep-allele-order --keep {input.samps} \
-#  --make-bed --out {params.out}
-#'''
-
 rule rename_for_dup:
     input: rules.ancestry_sample_filt.output.vcf
-    output: 'intermediate/formerge/{identifier}_{ancestry}_replicate{dup}.vcf.gz'
+    output: temp('intermediate/formerge/{identifier}_{ancestry}_b{build}_replicate{dup}.chr{chrom}.vcf.gz')
     conda: 'envs/bcftools.yaml'
     resources:
         mem_mb = 10000,
@@ -466,14 +449,13 @@ ln -rs {input} {output}
 bcftools index -tf {output}
 '''
 
-
 rule dup_samples:
     input:
         vcf = rules.ancestry_sample_filt.output.vcf,
-        vcfvcfvcf = lambda wc: expand('intermediate/formerge/{{identifier}}_{{ancestry}}_replicate{dup}.vcf.gz',
+        vcfvcfvcf = lambda wc: expand('intermediate/formerge/{{identifier}}_{{ancestry}}_b{{build}}_replicate{dup}.chr{{chrom}}.vcf.gz',
                                       dup=[x + 1 for x in range(int(wc['rep']) - 1)]),
         tbi = rules.ancestry_sample_filt.output.tbi
-    output: 'intermediate/pre-impute_ancestry/{identifier}_{ancestry}_duplicated{rep}.vcf.gz'
+    output: temp('intermediate/pre-impute_ancestry/{identifier}_{ancestry}_b{build}_duplicated{rep}.chr{chrom}.vcf.gz')
     conda: 'envs/bcftools.yaml'
     resources:
         mem_mb = 10000,
@@ -490,62 +472,55 @@ def identifier_ancestry_dup(wc):
     assert ia.shape[0] == 1
     dups = ia.loc[ia.index[0], 'dups']
     if dups == 1:
-        return expand('intermediate/pre-impute_ancestry/{identifier}_{ancestry}.vcf.gz', **wc)
+        return expand('intermediate/pre-impute_ancestry/{identifier}_{ancestry}.b{build}.chr{chrom}.vcf.gz', **wc)
     else:
-        return expand('intermediate/pre-impute_ancestry/{identifier}_{ancestry}_duplicated{rep}.vcf.gz',
-                      identifier=wc['identifier'], ancestry=wc['ancestry'], rep=dups)
+        return expand('intermediate/pre-impute_ancestry/{identifier}_{ancestry}_b{build}_duplicated{rep}.chr{chrom}.vcf.gz',
+                      identifier=wc['identifier'], ancestry=wc['ancestry'], build=wc['build'], chrom=wc['chrom'], rep=dups)
 
-
-use rule make_lifted_plink_all as make_imputation_plink with:
+rule copy_imputation_input:
     input: identifier_ancestry_dup
-    output: temp(multiext("intermediate/imputation_plink/{identifier}_{ancestry}", ".bed", ".bim", ".fam"))
-    params:
-        out_plink = "intermediate/imputation_plink/{identifier}_{ancestry}"
+    output: temp('intermediate/imputation/input/{identifier}_{ancestry}.b{build}.chr{chrom}.vcf.gz')
+    localrule: True
+    shell: 'cp {input} {output}'
 
 
-use rule fix_fam as fix_imputation_fam with:
-    input:
-        oldfam = rules.cat_fams.output,
-        newfam = "intermediate/imputation_plink/{identifier}_{ancestry}.fam"
-    output: "intermediate/imputation_plink_fixed/{identifier}_{ancestry}_fixed.fam"
+rule make_keep_lists:
+    input: 'intermediate/liftover_align/{identifier}_flipped_renamed.vcf.gz' #or lifted 'intermediate/lifted/{identifier}.b38.same_chr.vcf.gz'
+    output: 'intermediate/sample_lists/{identifier}_keep_samples.txt'
+    localrule: True
+    conda: 'envs/bcftools.yaml'
+    shell: 'bcftools query --list-samples {input} > {output}'
 
 
-rule copy_imputation:
-    input:
-        bed = "intermediate/imputation_plink/{identifier}_{ancestry}.bed",
-        bim = "intermediate/imputation_plink/{identifier}_{ancestry}.bim",
-        fam = rules.fix_imputation_fam.output
-    output:
-        bed = "intermediate/pre-impute_ancestry/{identifier}_{ancestry}.bed",
-        bim = "intermediate/pre-impute_ancestry/{identifier}_{ancestry}.bim",
-        fam = "intermediate/pre-impute_ancestry/{identifier}_{ancestry}.fam"
-    resources:
-        mem_mb = 1024,
-        time_min = 180
-    shell: '''
-cp {input.bed} {output.bed}
-cp {input.bim} {output.bim}
-cp {input.fam} {output.fam}
-'''
+rule cat_keep_lists:
+    input: expand('intermediate/sample_lists/{identifier}_keep_samples.txt', identifier=identifiers)
+    output: 'intermediate/sample_lists/keep_samples_all.txt'
+    localrule: True
+    shell: 'cat {input} > {output}'
 
-########################################
-###                                  ###
-###   Imputation                     ###
-###                                  ###
-########################################
+
+## Imputation Module
 
 config['impute']['out_dir'] = 'intermediate/imputation/'
-config['impute']['directory'] = 'intermediate/pre-impute_ancestry'
-config['impute']['SAMPLES'] = identifier_ancestry # [x.replace('_', '.') for x in center_platform_ancestry]
+config['impute']['directory'] = 'intermediate/imputation/input'
+config['impute']['include_samp_post'] = str(rules.cat_keep_lists.output[0])
+
 genome_build_preimp = config['Sample_Filtering_preimpute']['genome_build'].lower()
+
 if genome_build_preimp in ['hg19', 'hg37', 'grch37', 'b37']:
     config['impute']['ref'] = 'reference/human_g1k_hg19.fasta'
     config['impute']['imputation']['default']['build'] = 'hg19'
+    ibuild = "37"
 elif genome_build_preimp in ['hg38', 'grch38', 'b38']:
     config['impute']['ref'] = 'reference/human_g1k_GRCh38.fasta'
     config['impute']['imputation']['default']['build'] = 'hg38'
+    ibuild = "38"
 else:
     raise ValueError('genome build must be hg19 or hg38')
+
+config['impute']['SAMPLES'] = {
+    ia: {'file': f'intermediate/imputation/input/{ia}.b{ibuild}.chr{{chrom}}.vcf.gz',
+         'type': 'vcf_chr'} for ia in identifier_ancestry}
 
 if 'postImpute' in config['pipeline_versions']:
     config['impute']['version_postImpute'] = config['pipeline_versions']['postImpute']
@@ -572,9 +547,9 @@ use rule * from imputation as imputation_*
 
 use rule link_unimputed as link_imputed_output with:
     input:
-        bed = 'intermediate/imputation/imputed/processed/data/all_chrall_filtered.bed',
-        bim = 'intermediate/imputation/imputed/processed/data/all_chrall_filtered.bim',
-        fam = expand(rules.fix_fam.output, cohort="all")
+        bed = 'intermediate/imputation/imputed/processed/data/all_chrall_filtered_fixed.bed',
+        bim = 'intermediate/imputation/imputed/processed/data/all_chrall_filtered_fixed.bim',
+        fam = 'intermediate/imputation/imputed/processed/data/all_chrall_filtered_fixed.fam',
     output:
         bed = 'results/imputed/all.bed',
         bim = 'results/imputed/all.bim',
@@ -582,9 +557,9 @@ use rule link_unimputed as link_imputed_output with:
 
 use rule link_unimputed as link_imputed_output_cohort with:
     input:
-        bed = 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered.bed',
-        bim = 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered.bim',
-        fam = rules.fix_fam.output
+        bed = 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered_fixed.bed',
+        bim = 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered_fixed.bim',
+        fam = 'intermediate/imputation/imputed/processed/data/{cohort}_chrall_filtered_fixed.fam',
     output:
         bed = 'results/imputed/{cohort}.bed',
         bim = 'results/imputed/{cohort}.bim',
