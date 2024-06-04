@@ -113,9 +113,9 @@ rule all:
 def liftover_align_fasta(wc):
     build = config['datasets'][wc.identifier]['build']
     if build.lower() in ['b37', 'hg19', 'grch37']:
-        return f"/sc/arion/projects/load/users/picard03/projects/DIAN/dian_gwas_analysis/dataset_ADAD_array/reference/human_g1k_hg19.fasta"
+        return f"resources/ref/b37.fa.gz"
     elif build.lower() in ['b38', 'hg38', 'grch38']:
-        return f"/sc/arion/projects/load/users/picard03/projects/DIAN/dian_gwas_analysis/dataset_ADAD_array/reference/human_g1k_GRCh38.fasta"
+        return f"resources/ref/b38.fa.gz"
     else:
         raise ValueError(f"Invalid build {build}")
 
@@ -508,11 +508,11 @@ config['impute']['include_samp_post'] = str(rules.cat_keep_lists.output[0])
 genome_build_preimp = config['Sample_Filtering_preimpute']['genome_build'].lower()
 
 if genome_build_preimp in ['hg19', 'hg37', 'grch37', 'b37']:
-    config['impute']['ref'] = 'reference/human_g1k_hg19.fasta'
+    config['impute']['ref'] = 'resources/ref/b37.fa.gz'
     config['impute']['imputation']['default']['build'] = 'hg19'
     ibuild = "37"
 elif genome_build_preimp in ['hg38', 'grch38', 'b38']:
-    config['impute']['ref'] = 'reference/human_g1k_GRCh38.fasta'
+    config['impute']['ref'] = 'resources/ref/b38.fa.gz'
     config['impute']['imputation']['default']['build'] = 'hg38'
     ibuild = "38"
 else:
