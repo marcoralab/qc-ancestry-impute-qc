@@ -15,12 +15,17 @@ os.environ["snakemake_internet"] = '1'
 
 configfile: 'config/config.yaml'
 
+ruleorder: no_sexcheck_cohort > prefiltering_sexcheck_QC
 
 version_GWASampleFiltering = config['pipeline_versions']['GWASampleFiltering']
 version_imputePipeline = config['pipeline_versions']['imputePipeline']
 version_vcf_liftover = config['pipeline_versions']['vcf_liftover']
 
 identifiers = [x for x in config['datasets'].keys()]
+if "nosex" in [x for x in config['datasets'].values()][0].keys():
+    nosex = [k for k, v in config['datasets'].items() if v['nosex']]
+else:
+    nosex = []
 
 def parse_chrom(chrs):
     clist = [x.split(':') for x in chrs.split(',')]
@@ -33,8 +38,19 @@ def parse_chrom(chrs):
         parsed += chrs
     return parsed
 
+def rem_x(chrs):
+    return ','.join([x for x in chrs.split(',') if x not in ['X', 'Y']])
 
-chromlist_preimpute = parse_chrom(config['impute']['chroms'])
+if 'chroms_preimpute' in config:
+    chroms_preimpute_raw = config['chroms_preimpute']
+else:
+    chroms_preimpute_raw = config['impute']['chroms']
+
+chroms_preimpute = {k: rem_x(chroms_preimpute_raw)
+                       if k in nosex else chroms_preimpute_raw
+                    for k in identifiers}
+
+chromlist_preimpute = {k: parse_chrom(v) for k, v in chroms_preimpute.items()}
 
 def flatten(nested):
     flat = []
@@ -86,7 +102,8 @@ def imputed_outputs(wc):
 shell.executable('/bin/bash')
 
 wildcard_constraints:
-    identifier = r'[^/]+'
+    identifier = r'[^/]+',
+    nosex_cohort = "|".join(nosex) if nosex else "DNUDNUDNUDNU"
 
 localrules: all #, imputation_submit_imputation, imputation_download_imputation, ref_download_md5_b38, ref_download_md5_hg19, ref_download_tg_fa, ref_download_tg_ped, ref_download_tg_chrom, ref_download_md5_b38, ref_download_md5_hg19
 
@@ -113,11 +130,42 @@ rule all:
 def liftover_align_fasta(wc):
     build = config['datasets'][wc.identifier]['build']
     if build.lower() in ['b37', 'hg19', 'grch37']:
-        return f"resources/ref/b37.fa.gz"
+        return "resources/ref/b37.fa"
+#        return "resources/ref/b37.fa.gz"
     elif build.lower() in ['b38', 'hg38', 'grch38']:
-        return f"resources/ref/b38.fa.gz"
+        return "resources/ref/b38.fa"
+#        return "resources/ref/b38.fa.gz"
     else:
         raise ValueError(f"Invalid build {build}")
+
+def liftover_align_fasta_index(wc):
+    build = config['datasets'][wc.identifier]['build']
+    if build.lower() in ['b37', 'hg19', 'grch37']:
+        return "temp/faidx_b37.done"
+    elif build.lower() in ['b38', 'hg38', 'grch38']:
+        return "temp/faidx_b38.done"
+    else:
+        raise ValueError(f"Invalid build {build}")
+
+rule liftover_align_reindex:
+    input: "resources/ref/{bindex}.fa.gz"
+    output: "temp/faidx_{bindex}.done"
+    localrule: True
+    shell: '''
+if [[ -f {input}.gzi && -f {input}.fai ]]; then
+  echo touching files...
+  touch {input}.fai
+  touch {input}.gzi
+  touch {output}
+fi
+'''
+
+# decompress fasta
+rule decompress_fasta:
+    input: "resources/ref/{gbuild}.fa.gz"
+    output: "resources/ref/{gbuild}.fa"
+    localrule: True
+    shell: "zcat {input} > {output}"
 
 #add Sample flip
 rule liftover_align:
@@ -125,14 +173,15 @@ rule liftover_align:
         bed = lambda wc: config['datasets'][wc.identifier]['filestem'] + '.bed',
         bim = lambda wc: config['datasets'][wc.identifier]['filestem'] + '.bim',
         fam = lambda wc: config['datasets'][wc.identifier]['filestem'] + '.fam',
-        fasta = liftover_align_fasta
+        fasta = liftover_align_fasta,
+#	    index_done = liftover_align_fasta_index
     output:
         multiext("intermediate/liftover_align/{identifier}_flipped", ".bim", ".bed", ".fam")
     params:
         outstem = "intermediate/liftover_align/{identifier}"
     resources:
         mem_mb = 10000,
-        time_min = 30
+        time_min = 120
     container: 'docker://befh/flippyr:0.5.3'
     shell: "flippyr -p {input.fasta} -o {params.outstem} {input.bim}"
 
@@ -184,7 +233,7 @@ liftover = {}
 liftover['inputs'] = {
     k: {'input_vcf': f"intermediate/liftover_align/{k}_flipped_renamed.vcf.gz",
         'build': config['datasets'][k]['build'],
-        'contigs': config['impute']['chroms']} 
+        'contigs': chroms_preimpute[k]} 
     for k in identifiers
 }
 liftover['output_builds'] = ['b38']
@@ -295,7 +344,7 @@ rule link_prefilt_refname:
         pops = prefilter_prefix + '/' + 'reference/{refname}_pops.txt',
         pops_unique = prefilter_prefix + '/' + 'reference/{refname}_pops_unique.txt',
     resources:
-        time_min = 2
+        time_min = 10
     shell:
         '''
 ln -rs {input.pops} {output.pops}
@@ -335,7 +384,7 @@ rule link_prefilt_ped:
 refs = {}
 refs['ref_only'] = True
 refs['genome_build'] = ['hg19', 'hg38']
-refs['nointernet'] = True #TODO Delete this
+refs['nointernet'] = config['nointernet'] if 'nointernet' in config else False
 refs['GenoMiss'] = list(set([
     config['Sample_Filtering_preimpute']['QC']['GenoMiss'],
     config['Sample_Filtering_postimpute']['QC']['GenoMiss']]))
@@ -383,6 +432,16 @@ module prefiltering:
     prefix: prefilter_prefix
 
 use rule * from prefiltering as prefiltering_*
+
+rule no_sexcheck_cohort:
+    input: "intermediate/pre-impute_filter/input/{nosex_cohort}.fam"
+    output: "intermediate/pre-impute_filter/output/{nosex_cohort}_SexQC.sexcheck"
+    conda: 'envs/R.yaml'
+    threads: 1
+    resources:
+        mem_mb = 2000,
+        time_min = 5
+    script: "rule_no_sexcheck_cohort.R"
 
 rule ancestry_sample_lists:
     input: prefilter_prefix + '/output/{identifier}_cluster_pops.tsv'
@@ -541,9 +600,8 @@ module imputation:
 
 use rule * from imputation as imputation_*
 
-#rule cat_fams happens here (moved up in pipeline for use among liftover rules)
-
-#rule fix_fam happens here (moved up in pipeline for use among liftover rules)
+# rule cat_fams happens here (moved up in pipeline for use among liftover rules)
+# rule fix_fam happens here (moved up in pipeline for use among liftover rules)
 
 use rule link_unimputed as link_imputed_output with:
     input:
@@ -724,3 +782,4 @@ rule cat_exclusions:
         '''
 awk 'NR==1 || FNR>1' {input} > {output}
 '''
+
