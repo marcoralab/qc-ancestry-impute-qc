@@ -4,4 +4,4 @@ channels:
   - conda-forge
 
 dependencies:
-  - miller=5.10.3
+  - miller=6.8.0
