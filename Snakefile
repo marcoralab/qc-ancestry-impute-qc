@@ -93,6 +93,36 @@ def imputed_outputs(wc):
     return flatten([expand_outs(imputed_outs[x], id_a)
                     for x in config["impute"]["outputs"]])
 
+def calc_ibuild(build):
+    if build.lower() in ['hg19', 'hg37', 'grch37', 'b37']:
+        return "37"
+    elif build.lower() in ['hg38', 'grch38', 'b38']:
+        return "38"
+    else:
+        raise ValueError(f'Invalid build {build}')
+
+if 'genome_build' in config['Sample_Filtering_preimpute']:
+    ibuild_qc = calc_ibuild(config['Sample_Filtering_preimpute']['genome_build'])
+
+if 'build_preimpute' in config:
+    ibuild = calc_ibuild(config['build_preimpute'])
+    assert 'ibuild_qc' not in globals() or (ibuild == ibuild_qc), "builds must match"
+elif 'ibuild_qc' in globals():
+    ibuild = ibuild_qc
+else:
+    raise ValueError('pre-imputation build must be specified in config')
+
+if ibuild == "37":
+    config['impute']['ref'] = 'resources/ref/b37.fa.gz'
+    config['impute']['imputation']['default']['build'] = 'hg19'
+    config['Sample_Filtering_preimpute']['genome_build'] = 'hg19'
+elif ibuild == "38":
+    config['impute']['ref'] = 'resources/ref/b38.fa.gz'
+    config['impute']['imputation']['default']['build'] = 'hg38'
+    config['Sample_Filtering_preimpute']['genome_build'] = 'hg38'
+else:
+    raise ValueError('genome build must be hg19 or hg38')
+
 ################################
 ##                            ##
 ##      Snakemake setup       ##
@@ -236,7 +266,7 @@ liftover['inputs'] = {
         'contigs': chroms_preimpute[k]} 
     for k in identifiers
 }
-liftover['output_builds'] = ['b38']
+liftover['output_builds'] = [f'b{ibuild}']
 liftover['all_GATK_builds'] = True
 liftover['concatenate'] = True
 liftover['liftover_outdir'] = "intermediate/lifted"
@@ -564,19 +594,6 @@ config['impute']['out_dir'] = 'intermediate/imputation/'
 config['impute']['directory'] = 'intermediate/imputation/input'
 config['impute']['include_samp_post'] = str(rules.cat_keep_lists.output[0])
 
-genome_build_preimp = config['Sample_Filtering_preimpute']['genome_build'].lower()
-
-if genome_build_preimp in ['hg19', 'hg37', 'grch37', 'b37']:
-    config['impute']['ref'] = 'resources/ref/b37.fa.gz'
-    config['impute']['imputation']['default']['build'] = 'hg19'
-    ibuild = "37"
-elif genome_build_preimp in ['hg38', 'grch38', 'b38']:
-    config['impute']['ref'] = 'resources/ref/b38.fa.gz'
-    config['impute']['imputation']['default']['build'] = 'hg38'
-    ibuild = "38"
-else:
-    raise ValueError('genome build must be hg19 or hg38')
-
 config['impute']['SAMPLES'] = {
     ia: {'file': f'intermediate/imputation/input/{ia}.b{ibuild}.chr{{chrom}}.vcf.gz',
          'type': 'vcf_chr'} for ia in identifier_ancestry}
@@ -782,4 +799,3 @@ rule cat_exclusions:
         '''
 awk 'NR==1 || FNR>1' {input} > {output}
 '''
-
