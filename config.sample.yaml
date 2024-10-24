@@ -1,0 +1,209 @@
+pipeline_versions:
+  imputePipeline: "workflow/modules/imputePipeline" # 'v0.4.11'
+  GWASampleFiltering: "workflow/modules/GWASampleFiltering" # 'v0.4.7'
+  vcf_liftover: "workflow/modules/vcf_liftover"
+  postImpute: "workflow/modules/postImpute"
+
+nointernet: True
+
+chroms_preimpute: '1:22,X'
+
+populations: [EUR, AFR, AMR, EAS, SAS]
+
+impute:
+  imputation:
+    default: 
+      build: hg38
+      token: TKN
+      refpanel: topmed-r3
+    DATASET_ANC:
+      token: TKN
+
+  # Select chromosomes you want to upload
+  #  separate ranges with ":" and listed chromosomes with ","
+  #  You can put both in the same string. Use M for mitochondra
+  chroms: '1:22'
+
+  outputs: # Comment out any line with outputs you don't want
+    - stat_report # A report of imputation quality
+    - vcf_bycohort # Bgzipped VCF files for each cohort
+    # - vcf_merged # A bgzipped VCF with all cohorts
+    # - bgen_bycohort # Binary oxford filesets for each cohort
+    # - bgen_merged # A binary oxford fileset with all cohorts
+    - plink_bycohort # Binary plink filesets for each cohort
+    - plink_merged # A binary plink fileset with all cohorts
+
+  # Subject and variant level QC thresholds to apply before imputation
+  preqc:
+    hwe: 1e-30
+    #Hardy-Weinberg Equilibrium Cutoff ("false" to skip)
+    #MAF Cutoff ("false" to skip)
+    maf: false
+    #Variant level missingness cutoff
+    geno: 0.05
+    #Subject level missingness cutoff
+    mind: 0.05
+
+  # Variant level QC thresholds to apply after imputation
+  postqc:
+    # MAF Cutoff between common and rare
+    maf: 0.005
+    # Rsq to use with common variants
+    rsq: 0.3
+    # Rsq to use with rare variants (set to NA to use rsq as hard cutoff)
+    rsq2: NA
+    # Number of SNPs of each type (Imputed, Typed) to sample for figures
+    sampsize: 100000
+  # Sample filtering
+
+  chr_callrate: False
+  chunk_callrate: True
+
+  # filename of samples to include (plink --keep)
+  include_samp:
+
+  # filename of samples to exclude (plink --remove)
+  exclude_samp:
+
+  # --keep accepts a space/tab-delimited text file with
+  # family IDs in the first column and within-family IDs
+  # in the second column, and removes all unlisted samples
+  # from the current analysis. --remove does the same for
+  # all listed samples.
+
+
+Sample_Filtering_preimpute:
+  outputs: [report, exclusions]
+  #options are report, exclusions, and filtered
+  #nointernet: false
+
+  qc:
+    variant: true
+    callrate: true
+    sex: true
+    heterozygosity: true
+    relatedness: true
+    ancestry: true
+    popstrat: false
+
+  #Do the samples contain families (true/false):
+  family: true
+  pca_sd: false
+  superpop: all
+  pcair: true
+
+  QC:
+    GenoMiss: 0.05
+    SampMiss: 0.05
+    MAF: 0.01
+    HWE: 1e-30
+
+  # make sure population ref panel and sample snps all overlap?
+  #   select "intersection" for full overlap, or
+  #   select "union" to include any variant in either sample/panel
+  #   "intersection" is recommended
+  overlap_panel: intersection
+  #   select "intersection" to ensure main and extra reference snps all overlap
+  #   select "union" to include any variant in either main or extra reference
+  #   "union" recommended for microarray, otherwise "intersection"
+  overlap_extra: union
+
+  custom_ref:
+  # name: The name of a custom reference set, if using a custom main reference.
+  #   This should be descriptive and not contain whitespace, underscores or periods
+  #   DO NOT call it 1kG or extraref, as those are reserved names.
+    name: false
+  # file: the file, filestem or fileset with your custom reference, if using a custom ref.
+  #   It can be the filestem for a binary PLINK fileset containing all chromosomes.
+  #   for VCF references, give the filename. If there is a file for each chromosomem,
+  #     {chrom} will be replaced with the chromosome number
+    file: false
+    #inputs/foo.bar_baz # inputs/foo.baz_bar.vcf.gz #inputs/foo.bar_baz_chr{chrom}.qux.vcf.gz
+  # custom_pops: file with the header "FID IID Population"
+  #   and FID, IID and subpopulation in each row.
+  #   file should be space-separated and have entries for all ref samples
+  #   if you are using a VCF reference, FID should be the VCF sample ID befpre the first underscore,
+  #     and IID shhould be everything after. If there are no underscores, FID and IID should both
+  #     be the VCF sample ID.
+    custom_pops: false
+
+  # An optional extra reference for a subpopulation of
+  #   one of your reference pop
+  extra_ref:
+    name: false
+  # file: the file, filestem or fileset with your extra reference, if using an extra ref.
+  #   It can be the filestem for a binary PLINK fileset containing all chromosomes.
+  #   for VCF references, give the filename. If there is a file for each chromosomem,
+  #     {chrom} will be replaced with the chromosome number
+    file: false
+  # subpopulation code for your additional reference. It should be a subpopulation of the superpop or not be a 1kgp population
+    subpop: false
+
+Sample_Filtering_postimpute:
+  outputs: [report, exclusions]
+  #options are report, exclusions, and filtered
+  #nointernet: false
+
+  qc:
+    variant: true
+    callrate: false
+    sex: false
+    heterozygosity: false
+    relatedness: true
+    ancestry: true
+    popstrat: true
+
+  #Do the samples contain families (true/false):
+  family: true
+  pca_sd: false
+  superpop: all
+  pcair: true
+
+  QC:
+    GenoMiss: 0.05
+    SampMiss: 0.05
+    MAF: 0.01
+    HWE: 1e-30
+
+  genome_build: hg38
+
+  # make sure population ref panel and sample snps all overlap?
+  #   select "intersection" for full overlap, or
+  #   select "union" to include any variant in either sample/panel
+  #   "intersection" is recommended
+  overlap_panel: intersection
+  #   select "intersection" to ensure main and extra reference snps all overlap
+  #   select "union" to include any variant in either main or extra reference
+  #   "union" recommended for microarray, otherwise "intersection"
+  overlap_extra: union
+
+  custom_ref:
+  # name: The name of a custom reference set, if using a custom main reference.
+  #   This should be descriptive and not contain whitespace, underscores or periods
+  #   DO NOT call it 1kG or extraref, as those are reserved names.
+    name: false
+  # file: the file, filestem or fileset with your custom reference, if using a custom ref.
+  #   It can be the filestem for a binary PLINK fileset containing all chromosomes.
+  #   for VCF references, give the filename. If there is a file for each chromosomem,
+  #     {chrom} will be replaced with the chromosome number
+    file: false
+    #inputs/foo.bar_baz # inputs/foo.baz_bar.vcf.gz #inputs/foo.bar_baz_chr{chrom}.qux.vcf.gz
+  # custom_pops: file with the header "FID IID Population"
+  #   and FID, IID and subpopulation in each row.
+  #   file should be space-separated and have entries for all ref samples
+  #   if you are using a VCF reference, FID should be the VCF sample ID befpre the first underscore,
+  #     and IID shhould be everything after. If there are no underscores, FID and IID should both
+  #     be the VCF sample ID.
+    custom_pops: false
+
+  # An optional extra reference for a subpopulation of
+  #   one of your reference pop
+  extra_ref:
+    name: false
+  # file: the file, filestem or fileset with your extra reference, if using an extra ref.
+  #   It can be the filestem for a binary PLINK fileset containing all chromosomes.
+  #   for VCF references, give the filename. If there is a file for each chromosomem,
+  #     {chrom} will be replaced with the chromosome number
+    file: false
+  # subpopulation code for your additional reference. It should be a subpopulation of the superpop or not be a 1kgp population
+    subpop: false
