@@ -7,17 +7,17 @@ pipeline_versions:
 nointernet: True
 
 chroms_preimpute: '1:22,X'
+build_preimpute: b38
 
 populations: [EUR, AFR, AMR, EAS, SAS]
 
 impute:
   imputation:
-    default: 
-      build: hg38
+    default:
       token: TKN
       refpanel: topmed-r3
     DATASET_ANC:
-      token: TKN
+      token: TKN_OTHER
 
   # Select chromosomes you want to upload
   #  separate ranges with ":" and listed chromosomes with ","
