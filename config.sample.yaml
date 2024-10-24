@@ -14,27 +14,10 @@ impute:
   imputation:
     default: 
       build: hg38
-      token: 
+      token: TKN
       refpanel: topmed-r3
-    pradi-psen1-g206a-gsa_AFR:
-      token: eyJjdHkiOiJ0ZXh0XC9wbGFpbiIsImFsZyI6IkhTMjU2In0.eyJtYWlsIjoiZnVsdG9uaDFAZ21haWwuY29tIiwiYXBpX2hhc2giOiJPUjFRT09BYkNFSzEzbEh0NkoxQW1DcHdzN1VBOVciLCJleHBpcmUiOjE3MzQ3OTQ1NzQ5MTQsIm5hbWUiOiJCcmlhbiBGdWx0b24tSG93YXJkIiwiYXBpIjp0cnVlLCJ1c2VybmFtZSI6ImJlZmgifQ.iPuD578pTTV76RC46-P2XYaCWNgpmg3ZnwunT3vmUHY
-    dian-obs-core-exome-neurox2_EAS:
-      token: eyJjdHkiOiJ0ZXh0XC9wbGFpbiIsImFsZyI6IkhTMjU2In0.eyJtYWlsIjoiZnVsdG9uaDFAZ21haWwuY29tIiwiYXBpX2hhc2giOiJPUjFRT09BYkNFSzEzbEh0NkoxQW1DcHdzN1VBOVciLCJleHBpcmUiOjE3MzQ3OTQ1NzQ5MTQsIm5hbWUiOiJCcmlhbiBGdWx0b24tSG93YXJkIiwiYXBpIjp0cnVlLCJ1c2VybmFtZSI6ImJlZmgifQ.iPuD578pTTV76RC46-P2XYaCWNgpmg3ZnwunT3vmUHY
-    dian-obs-core-exome-neurox2_AFR:
-      token: eyJjdHkiOiJ0ZXh0XC9wbGFpbiIsImFsZyI6IkhTMjU2In0.eyJtYWlsIjoiZnVsdG9uaDFAZ21haWwuY29tIiwiYXBpX2hhc2giOiJPUjFRT09BYkNFSzEzbEh0NkoxQW1DcHdzN1VBOVciLCJleHBpcmUiOjE3MzQ3OTQ1NzQ5MTQsIm5hbWUiOiJCcmlhbiBGdWx0b24tSG93YXJkIiwiYXBpIjp0cnVlLCJ1c2VybmFtZSI6ImJlZmgifQ.iPuD578pTTV76RC46-P2XYaCWNgpmg3ZnwunT3vmUHY
-    dian-obs-gsa_AMR:
-      token: eyJjdHkiOiJ0ZXh0XC9wbGFpbiIsImFsZyI6IkhTMjU2In0.eyJtYWlsIjoiZGFuaWVsbGUucGljYXJlbGxvQG1zc20uZWR1IiwiYXBpX2hhc2giOiJoV0doS0hqYmFva01KcXFUekVuTU1ycVkxa200WGEiLCJleHBpcmUiOjE3MzQ3MTY4NDI0NzcsIm5hbWUiOiJEYW5pZWxsZSBQaWNhcmVsbG8iLCJhcGkiOnRydWUsInVzZXJuYW1lIjoicGljYXJkMDMifQ.h4eTEKxCfaGb0eYLsT4lDgtSpuly9KgiCfqrqSXF1Ug 
-    pradi-psen1-g206a-gsa_EUR:
-      token: eyJjdHkiOiJ0ZXh0XC9wbGFpbiIsImFsZyI6IkhTMjU2In0.eyJtYWlsIjoiZGFuaWVsbGUucGljYXJlbGxvQG1zc20uZWR1IiwiYXBpX2hhc2giOiJoV0doS0hqYmFva01KcXFUekVuTU1ycVkxa200WGEiLCJleHBpcmUiOjE3MzQ3MTY4NDI0NzcsIm5hbWUiOiJEYW5pZWxsZSBQaWNhcmVsbG8iLCJhcGkiOnRydWUsInVzZXJuYW1lIjoicGljYXJkMDMifQ.h4eTEKxCfaGb0eYLsT4lDgtSpuly9KgiCfqrqSXF1Ug
-    dian-obs-gsa_AFR:
-      token: eyJjdHkiOiJ0ZXh0XC9wbGFpbiIsImFsZyI6IkhTMjU2In0.eyJtYWlsIjoiZGFuaWVsbGUucGljYXJlbGxvQG1zc20uZWR1IiwiYXBpX2hhc2giOiJoV0doS0hqYmFva01KcXFUekVuTU1ycVkxa200WGEiLCJleHBpcmUiOjE3MzQ3MTY4NDI0NzcsIm5hbWUiOiJEYW5pZWxsZSBQaWNhcmVsbG8iLCJhcGkiOnRydWUsInVzZXJuYW1lIjoicGljYXJkMDMifQ.h4eTEKxCfaGb0eYLsT4lDgtSpuly9KgiCfqrqSXF1Ug
-    dian-obs-gsa_EUR:
-      token:
-    dian-obs-core-exome-neurox2_AMR:
-      token:
-    colombian-psen1-e280a-mega_AMR:
-      token:
-
+    DATASET_ANC:
+      token: TKN
 
   # Select chromosomes you want to upload
   #  separate ranges with ":" and listed chromosomes with ","
