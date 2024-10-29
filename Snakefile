@@ -212,7 +212,7 @@ rule liftover_align:
     resources:
         mem_mb = 10000,
         time_min = 120
-    container: 'docker://befh/flippyr:0.5.3'
+    container: 'docker://befh/flippyr:0.6.0'
     shell: "flippyr -p {input.fasta} -o {params.outstem} {input.bim}"
 
 # Recode sample plink file to vcf
