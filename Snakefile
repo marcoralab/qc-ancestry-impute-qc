@@ -212,7 +212,7 @@ rule liftover_align:
     resources:
         mem_mb = 10000,
         time_min = 120
-    container: 'docker://befh/flippyr:0.6.0'
+    container: 'docker://befh/flippyr:0.6.1'
     shell: "flippyr -p {input.fasta} -o {params.outstem} {input.bim}"
 
 # Recode sample plink file to vcf
@@ -230,7 +230,7 @@ rule liftover_Plink2Vcf:
     conda: "envs/PLINK.yaml"
     shell:
         '''
-        plink --bed {input.bed} --bim {input.bim} --fam {input.fam} --recode vcf bgz --real-ref-alleles --out {params.outstem}
+plink --bed {input.bed} --bim {input.bim} --fam {input.fam} --recode vcf bgz --real-ref-alleles --out {params.outstem}
 	'''
 
 def rename_chrs(wc):
@@ -253,9 +253,8 @@ rule rename_chrs:
     #conda: "envs/bcftools.yaml"
     shell:
         '''
-        ml bcftools
-        bcftools annotate --rename-chrs {params.txt} -Oz -o {output} {input}
-        bcftools index -t {output}
+bcftools annotate --rename-chrs {params.txt} -Oz -o {output} {input}
+bcftools index -t {output}
 	'''
 
 ## VCF liftover module
