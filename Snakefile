@@ -291,8 +291,8 @@ rule make_lifted_plink_all:
         out_plink = "intermediate/lifted/{identifier}"
     threads: 10
     resources:
-        mem_mb = 3000,
-        walltime = "96:00"
+        mem_mb = 30000,
+        runtime: "96h"
     conda: "envs/PLINK.yaml"
     shell: 'plink --keep-allele-order --vcf {input} --double-id --memory 10000 --threads 10 --make-bed --out {params.out_plink}'
 
@@ -668,7 +668,7 @@ use rule link_unimputed as link_imputed with:
 use rule stats from postImpute as postImpute_stats with:
     resources:
         mem_mb = 24000,
-        walltime = '8:00'
+        runtime: "8h"
 
 def imputation_getmerge(wc):
     # defaults for renaming:
@@ -732,8 +732,8 @@ use rule * from postfiltering as postfiltering_*
 use rule Sample_Flip from postfiltering as postfiltering_Sample_Flip with:
     threads: 10
     resources:
-        mem_mb = 6000,
-        walltime = '8:00'
+        mem_mb = 60000,
+        runtime: "8h"
 
 rule link_postfilt_refname:
     input:
@@ -798,3 +798,5 @@ rule cat_exclusions:
         '''
 awk 'NR==1 || FNR>1' {input} > {output}
 '''
+
+### Processed by update_sm8plus.py for Snakemake 8+ ###
