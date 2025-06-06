@@ -4,6 +4,8 @@ import re
 import numpy as np
 import pandas as pd
 import os
+from snakemake.utils import min_version
+min_version("8.0")
 
 os.environ["snakemake_internet"] = '1'
 
@@ -292,7 +294,7 @@ rule make_lifted_plink_all:
     threads: 10
     resources:
         mem_mb = 30000,
-        runtime: "96h"
+        runtime = "96h"
     conda: "envs/PLINK.yaml"
     shell: 'plink --keep-allele-order --vcf {input} --double-id --memory 10000 --threads 10 --make-bed --out {params.out_plink}'
 
@@ -668,7 +670,7 @@ use rule link_unimputed as link_imputed with:
 use rule stats from postImpute as postImpute_stats with:
     resources:
         mem_mb = 24000,
-        runtime: "8h"
+        runtime = "8h"
 
 def imputation_getmerge(wc):
     # defaults for renaming:
@@ -733,7 +735,7 @@ use rule Sample_Flip from postfiltering as postfiltering_Sample_Flip with:
     threads: 10
     resources:
         mem_mb = 60000,
-        runtime: "8h"
+        runtime = "8h"
 
 rule link_postfilt_refname:
     input:
