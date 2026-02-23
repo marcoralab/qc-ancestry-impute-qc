@@ -599,6 +599,7 @@ config['impute']['SAMPLES'] = {
          'type': 'vcf_chr'} for ia in identifier_ancestry}
 
 config['impute']['temp_ccs'] = True
+config['impute']['fix_fam'] = 'intermediate/all_preimpute.fam'
 
 if 'postImpute' in config['pipeline_versions']:
     config['impute']['version_postImpute'] = config['pipeline_versions']['postImpute']
