@@ -599,6 +599,8 @@ config['impute']['SAMPLES'] = {
     ia: {'file': f'intermediate/imputation/input/{ia}.b{ibuild}.chr{{chrom}}.vcf.gz',
          'type': 'vcf_chr'} for ia in identifier_ancestry}
 
+config['impute']['temp_ccs'] = True
+
 if 'postImpute' in config['pipeline_versions']:
     config['impute']['version_postImpute'] = config['pipeline_versions']['postImpute']
 elif version_imputePipeline == 'local':
@@ -799,6 +801,20 @@ rule cat_exclusions:
     shell:
         '''
 awk 'NR==1 || FNR>1' {input} > {output}
+'''
+
+rule copy_allvcf_newinfo:
+    input: 'intermediate/imputation/imputed/processed/data/all_chrall_filtered.vcf.gz'
+    output: 'results/imputed/all.vcf.gz'
+    conda: 'envs/bcftools.yaml'
+    threads: 2
+    resources:
+        mem_mb = 2048,
+        runtime = '10h'
+    shell:
+        '''
+bcftools annotate -x INFO -Ou {input} | \
+  bcftools +fill-tags -Wtbi -Oz -o {output}
 '''
 
 ### Processed by update_sm8plus.py for Snakemake 8+ ###
