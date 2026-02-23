@@ -137,7 +137,6 @@ wildcard_constraints:
     identifier = r'[^/]+',
     nosex_cohort = "|".join(nosex) if nosex else "DNUDNUDNUDNU"
 
-localrules: all #, imputation_submit_imputation, imputation_download_imputation, ref_download_md5_b38, ref_download_md5_hg19, ref_download_tg_fa, ref_download_tg_ped, ref_download_tg_chrom, ref_download_md5_b38, ref_download_md5_hg19
 
 rule all:
     input:
