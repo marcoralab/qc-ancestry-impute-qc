@@ -669,7 +669,7 @@ use rule link_unimputed as link_imputed with:
         bim = 'intermediate/post-impute_filter/input/imputed.bim',
         fam = 'intermediate/post-impute_filter/input/imputed.fam'
 
-use rule stats from imputation as postImpute_stats with:
+use rule postImpute_stats from imputation as imputation_postImpute_stats with:
     resources:
         mem_mb = 24000,
         runtime = "8h"
@@ -693,13 +693,13 @@ def imputation_getmerge_bgen(wc):
     renamed_merge = "{{impute_dir}}/temp/{cohort}_chr{{chrom}}"
     return expand(renamed_merge, cohort=COHORT)
 
-use rule merge_samples_chrom from imputation as postImpute_merge_samples_chrom with:
+use rule postImpute_merge_samples_chrom from imputation as imputation_postImpute_merge_samples_chrom with:
     input:
         vcf = lambda wc: imputation_getmerge(wc),
         tbi = lambda wc: [x + ".tbi" for x in imputation_getmerge(wc)]
 
 if 'bgen_merged' in config['impute']['outputs']:
-    use rule make_bgen_allsamp from imputation as postImpute_make_bgen_allsamp with:
+    use rule postImpute_make_bgen_allsamp from imputation as imputation_postImpute_make_bgen_allsamp with:
         input:
             gen = lambda wc: [x + "_filtered.bgen" for x in imputation_getmerge_bgen(wc)],
             samp = lambda wc: [x + ".sample" for x in imputation_getmerge_bgen(wc)]
