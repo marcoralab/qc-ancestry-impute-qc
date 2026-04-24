@@ -270,6 +270,7 @@ liftover['output_builds'] = [f'b{ibuild}']
 liftover['all_GATK_builds'] = True
 liftover['concatenate'] = True
 liftover['liftover_outdir'] = "intermediate/lifted"
+liftover['nointernet'] = config['nointernet']
 
 if version_vcf_liftover == 'local':
     sfile_vcf_liftover = local_src + '/vcf_liftover/workflow/Snakefile'
@@ -668,11 +669,6 @@ use rule link_unimputed as link_imputed with:
         bed = 'intermediate/post-impute_filter/input/imputed.bed',
         bim = 'intermediate/post-impute_filter/input/imputed.bim',
         fam = 'intermediate/post-impute_filter/input/imputed.fam'
-
-use rule postImpute_stats from imputation as imputation_postImpute_stats with:
-    resources:
-        mem_mb = 24000,
-        runtime = "8h"
 
 def imputation_getmerge(wc):
     # defaults for renaming:
