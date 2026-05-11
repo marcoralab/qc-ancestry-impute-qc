@@ -4,6 +4,8 @@ import re
 import numpy as np
 import pandas as pd
 import os
+from snakemake.utils import min_version
+min_version("8.0")
 
 os.environ["snakemake_internet"] = '1'
 
@@ -135,7 +137,6 @@ wildcard_constraints:
     identifier = r'[^/]+',
     nosex_cohort = "|".join(nosex) if nosex else "DNUDNUDNUDNU"
 
-localrules: all #, imputation_submit_imputation, imputation_download_imputation, ref_download_md5_b38, ref_download_md5_hg19, ref_download_tg_fa, ref_download_tg_ped, ref_download_tg_chrom, ref_download_md5_b38, ref_download_md5_hg19
 
 rule all:
     input:
@@ -250,7 +251,7 @@ rule rename_chrs:
     resources:
         mem_mb = 10000,
         time_min = 120
-    #conda: "envs/bcftools.yaml"
+    conda: "envs/bcftools.yaml"
     shell:
         '''
 bcftools annotate --rename-chrs {params.txt} -Oz -o {output} {input}
@@ -269,6 +270,7 @@ liftover['output_builds'] = [f'b{ibuild}']
 liftover['all_GATK_builds'] = True
 liftover['concatenate'] = True
 liftover['liftover_outdir'] = "intermediate/lifted"
+liftover['nointernet'] = config['nointernet']
 
 if version_vcf_liftover == 'local':
     sfile_vcf_liftover = local_src + '/vcf_liftover/workflow/Snakefile'
@@ -291,8 +293,8 @@ rule make_lifted_plink_all:
         out_plink = "intermediate/lifted/{identifier}"
     threads: 10
     resources:
-        mem_mb = 3000,
-        walltime = "96:00"
+        mem_mb = 30000,
+        runtime = "96h"
     conda: "envs/PLINK.yaml"
     shell: 'plink --keep-allele-order --vcf {input} --double-id --memory 10000 --threads 10 --make-bed --out {params.out_plink}'
 
@@ -597,6 +599,9 @@ config['impute']['SAMPLES'] = {
     ia: {'file': f'intermediate/imputation/input/{ia}.b{ibuild}.chr{{chrom}}.vcf.gz',
          'type': 'vcf_chr'} for ia in identifier_ancestry}
 
+config['impute']['temp_ccs'] = True
+config['impute']['fix_fam'] = 'intermediate/all_preimpute.fam'
+
 if 'postImpute' in config['pipeline_versions']:
     config['impute']['version_postImpute'] = config['pipeline_versions']['postImpute']
 elif version_imputePipeline == 'local':
@@ -665,11 +670,6 @@ use rule link_unimputed as link_imputed with:
         bim = 'intermediate/post-impute_filter/input/imputed.bim',
         fam = 'intermediate/post-impute_filter/input/imputed.fam'
 
-use rule stats from postImpute as postImpute_stats with:
-    resources:
-        mem_mb = 24000,
-        walltime = '8:00'
-
 def imputation_getmerge(wc):
     # defaults for renaming:
     renamed_merge = "{{impute_dir}}/data/by_chrom/{cohort}_chr{{chrom}}_filtered.vcf.gz"
@@ -689,13 +689,13 @@ def imputation_getmerge_bgen(wc):
     renamed_merge = "{{impute_dir}}/temp/{cohort}_chr{{chrom}}"
     return expand(renamed_merge, cohort=COHORT)
 
-use rule merge_samples_chrom from postImpute as postImpute_merge_samples_chrom with:
+use rule postImpute_merge_samples_chrom from imputation as imputation_postImpute_merge_samples_chrom with:
     input:
         vcf = lambda wc: imputation_getmerge(wc),
         tbi = lambda wc: [x + ".tbi" for x in imputation_getmerge(wc)]
 
 if 'bgen_merged' in config['impute']['outputs']:
-    use rule make_bgen_allsamp from postImpute as postImpute_make_bgen_allsamp with:
+    use rule postImpute_make_bgen_allsamp from imputation as imputation_postImpute_make_bgen_allsamp with:
         input:
             gen = lambda wc: [x + "_filtered.bgen" for x in imputation_getmerge_bgen(wc)],
             samp = lambda wc: [x + ".sample" for x in imputation_getmerge_bgen(wc)]
@@ -732,8 +732,8 @@ use rule * from postfiltering as postfiltering_*
 use rule Sample_Flip from postfiltering as postfiltering_Sample_Flip with:
     threads: 10
     resources:
-        mem_mb = 6000,
-        walltime = '8:00'
+        mem_mb = 60000,
+        runtime = "8h"
 
 rule link_postfilt_refname:
     input:
@@ -798,3 +798,19 @@ rule cat_exclusions:
         '''
 awk 'NR==1 || FNR>1' {input} > {output}
 '''
+
+rule copy_allvcf_newinfo:
+    input: 'intermediate/imputation/imputed/processed/data/all_chrall_filtered.vcf.gz'
+    output: 'results/imputed/all.vcf.gz'
+    conda: 'envs/bcftools.yaml'
+    threads: 2
+    resources:
+        mem_mb = 2048,
+        runtime = '10h'
+    shell:
+        '''
+bcftools annotate -x INFO -Ou {input} | \
+  bcftools +fill-tags -Wtbi -Oz -o {output}
+'''
+
+### Processed by update_sm8plus.py for Snakemake 8+ ###
